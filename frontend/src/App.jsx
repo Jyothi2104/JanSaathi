@@ -2,20 +2,20 @@ import {
     BrowserRouter,
     Routes,
     Route,
-    Link,
     Navigate
 } from "react-router-dom";
 
+import { LanguageProvider } from "./LanguageContext";
+import Header from "./components/Header";
 import CitizenPage from "./CitizenPage";
 import OfficerLogin from "./OfficerLogin";
 import OfficerDashboard from "./OfficerDashboard";
 
+// Route protection for officer portal
 function ProtectedOfficer() {
     const token = localStorage.getItem("officerToken");
 
-    
-
-    if (token === null) {
+    if (!token) {
         return <Navigate to="/login" replace />;
     }
 
@@ -24,36 +24,37 @@ function ProtectedOfficer() {
 
 function App() {
     return (
-        <BrowserRouter>
+        <LanguageProvider>
+            <BrowserRouter>
+                <div className="app-layout">
+                    <Header />
 
-            <nav>
-                <Link to="/">Citizen</Link>
-                {" | "}
-                <Link to="/login">Officer Login</Link>
-            </nav>
+                    <main className="app-content">
+                        <Routes>
+                            <Route
+                                path="/"
+                                element={<CitizenPage />}
+                            />
 
-            <hr />
+                            <Route
+                                path="/login"
+                                element={<OfficerLogin />}
+                            />
 
-            <Routes>
+                            <Route
+                                path="/officer"
+                                element={<ProtectedOfficer />}
+                            />
 
-                <Route
-                    path="/"
-                    element={<CitizenPage />}
-                />
-
-                <Route
-                    path="/login"
-                    element={<OfficerLogin />}
-                />
-
-                <Route
-                    path="/officer"
-                    element={<ProtectedOfficer />}
-                />
-
-            </Routes>
-
-        </BrowserRouter>
+                            <Route
+                                path="*"
+                                element={<Navigate to="/" replace />}
+                            />
+                        </Routes>
+                    </main>
+                </div>
+            </BrowserRouter>
+        </LanguageProvider>
     );
 }
 

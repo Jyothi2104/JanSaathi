@@ -1,9 +1,17 @@
 const express = require("express");
 const { getDB } = require("../database");
 const { analyzeComplaint } = require("../gemini");
+const { ObjectId } = require("mongodb");
 
 const router = express.Router();
 
+// Helper to generate readable tracking code e.g. JS-8492
+function generateTrackingCode() {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    return `JS-${randomDigits}`;
+}
+
+// Submit citizen complaint
 router.post("/", async (req, res) => {
     try {
         const { complaintText, language } = req.body;
@@ -14,43 +22,45 @@ router.post("/", async (req, res) => {
             });
         }
 
-        // Send complaint to Gemini
+        // Analyze via Gemini AI
         const aiResult = await analyzeComplaint(
             complaintText,
             language
         );
 
         const db = getDB();
+        const trackingCode = generateTrackingCode();
 
-        // Create complaint with AI analysis
         const complaint = {
+            trackingCode,
             complaintText,
             language,
-            category: aiResult.category,
-            urgency: aiResult.urgency,
-            department: aiResult.department,
-            reply: aiResult.reply,
+            category: aiResult.category || "other",
+            urgency: aiResult.urgency || "medium",
+            department: aiResult.department || "Municipal Grievance Cell",
+            reply: aiResult.reply || "Your complaint has been submitted successfully.",
             status: "New",
-            createdAt: new Date()
+            createdAt: new Date(),
+            updatedAt: new Date()
         };
 
-        // Save to MongoDB
         const result = await db
             .collection("complaints")
             .insertOne(complaint);
 
         res.status(201).json({
             message: "Complaint analyzed and submitted successfully",
-
             complaint: {
                 id: result.insertedId,
+                trackingCode,
                 complaintText,
                 language,
-                category: aiResult.category,
-                urgency: aiResult.urgency,
-                department: aiResult.department,
-                reply: aiResult.reply,
-                status: "New"
+                category: complaint.category,
+                urgency: complaint.urgency,
+                department: complaint.department,
+                reply: complaint.reply,
+                status: complaint.status,
+                createdAt: complaint.createdAt
             }
         });
 
@@ -62,14 +72,40 @@ router.post("/", async (req, res) => {
         });
     }
 });
-// Get all complaints
+
+// Fetch all complaints with optional filtering
 router.get("/", async (req, res) => {
     try {
+        const { status, category, urgency, search } = req.query;
         const db = getDB();
+
+        let filter = {};
+
+        if (status && status !== "All") {
+            filter.status = status;
+        }
+
+        if (category && category !== "All") {
+            filter.category = category.toLowerCase();
+        }
+
+        if (urgency && urgency !== "All") {
+            filter.urgency = urgency.toLowerCase();
+        }
+
+        if (search && search.trim() !== "") {
+            const searchRegex = new RegExp(search.trim(), "i");
+            filter.$or = [
+                { complaintText: searchRegex },
+                { trackingCode: searchRegex },
+                { department: searchRegex },
+                { category: searchRegex }
+            ];
+        }
 
         const complaints = await db
             .collection("complaints")
-            .find()
+            .find(filter)
             .sort({ createdAt: -1 })
             .toArray();
 
@@ -80,6 +116,41 @@ router.get("/", async (req, res) => {
 
         res.status(500).json({
             message: "Failed to fetch complaints"
+        });
+    }
+});
+
+// Track single complaint by ID or tracking code
+router.get("/track/:query", async (req, res) => {
+    try {
+        const { query } = req.params;
+        const db = getDB();
+
+        let searchCondition = { trackingCode: query.trim().toUpperCase() };
+
+        if (ObjectId.isValid(query)) {
+            searchCondition = {
+                $or: [
+                    { _id: new ObjectId(query) },
+                    { trackingCode: query.trim().toUpperCase() }
+                ]
+            };
+        }
+
+        const complaint = await db.collection("complaints").findOne(searchCondition);
+
+        if (!complaint) {
+            return res.status(404).json({
+                message: "No complaint found with this Tracking ID or Code"
+            });
+        }
+
+        res.json(complaint);
+
+    } catch (error) {
+        console.error("Error tracking complaint:", error);
+        res.status(500).json({
+            message: "Error retrieving complaint tracking information"
         });
     }
 });
@@ -104,12 +175,20 @@ router.patch("/:id/status", async (req, res) => {
 
         const db = getDB();
 
-        const { ObjectId } = require("mongodb");
+        let query = { trackingCode: id };
+        if (ObjectId.isValid(id)) {
+            query = {
+                $or: [
+                    { _id: new ObjectId(id) },
+                    { trackingCode: id }
+                ]
+            };
+        }
 
         const result = await db
             .collection("complaints")
             .updateOne(
-                { _id: new ObjectId(id) },
+                query,
                 {
                     $set: {
                         status: status,
@@ -137,4 +216,5 @@ router.patch("/:id/status", async (req, res) => {
         });
     }
 });
+
 module.exports = router;
