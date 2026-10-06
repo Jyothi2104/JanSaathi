@@ -89,7 +89,7 @@ function CitizenPage() {
             setResult(null);
 
             const response = await axios.post(
-                "http://localhost:5000/api/complaints",
+               `${import.meta.env.VITE_API_URL}/api/complaints`,
                 {
                     complaintText: complaintText,
                     category: category,
@@ -122,7 +122,7 @@ function CitizenPage() {
             setTrackedComplaint(null);
 
             const response = await axios.get(
-                `http://localhost:5000/api/complaints/track/${trackingCodeInput.trim()}`
+            `${import.meta.env.VITE_API_URL}/api/complaints/track/${trackingCodeInput.trim()}`
             );
 
             setTrackedComplaint(response.data);

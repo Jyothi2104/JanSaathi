@@ -34,7 +34,7 @@ function OfficerDashboard() {
             setLoading(true);
             const token = localStorage.getItem("officerToken");
 
-            const response = await axios.get("http://localhost:5000/api/complaints", {
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/complaints`, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
@@ -77,7 +77,7 @@ function OfficerDashboard() {
             const token = localStorage.getItem("officerToken");
 
             await axios.patch(
-                `http://localhost:5000/api/complaints/${id}/status`,
+                `${import.meta.env.VITE_API_URL}/api/complaints/${id}/status`,
                 { status: status },
                 {
                     headers: {
